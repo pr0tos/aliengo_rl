@@ -1,0 +1,3 @@
+[submodule "LieGroupHamDL"]
+	path = LieGroupHamDL
+	url = https://github.com/thaipduong/LieGroupHamDL.git

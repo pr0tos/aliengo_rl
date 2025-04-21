@@ -1,0 +1,43 @@
+rosbag2_bagfile_information:
+  compression_format: ''
+  compression_mode: ''
+  custom_data: {}
+  duration:
+    nanoseconds: 10248955726
+  files:
+  - duration:
+      nanoseconds: 10248955726
+    message_count: 3018
+    path: data_collected.db3
+    starting_time:
+      nanoseconds_since_epoch: 1741862334995101690
+  message_count: 3018
+  relative_file_paths:
+  - data_collected.db3
+  ros_distro: rosbags
+  starting_time:
+    nanoseconds_since_epoch: 1741862334995101690
+  storage_identifier: sqlite3
+  topics_with_message_count:
+  - message_count: 1006
+    topic_metadata:
+      name: observation
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: ssrl_ros_go1_msgs/msg/Observation
+      type_description_hash: RIHS01_deb4702b93e88165df1492bb4a7e1fa81e0121ed624dc14c5b9bcc4b1f5b6951
+  - message_count: 1006
+    topic_metadata:
+      name: pd_target
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: ssrl_ros_go1_msgs/msg/PdTarget
+      type_description_hash: RIHS01_1a0d041054c3e386d44400ee5fecdd27779fd4623dd4364f6c3d085fd628f0c7
+  - message_count: 1006
+    topic_metadata:
+      name: action
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: ssrl_ros_go1_msgs/msg/Action
+      type_description_hash: RIHS01_fe175827e7d0e2a7ccdde8af32e13cec0966c1d898a43f01f017b709d21b57dc
+  version: 8
