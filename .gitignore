@@ -1,0 +1,4 @@
+.vscode/
+MUJOCO_LOG.TXT
+aliengo_models/
+wandb/
