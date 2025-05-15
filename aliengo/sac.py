@@ -7,28 +7,6 @@ import numpy as np
 from collections import deque
 import wandb
 
-class Normalizer:
-    def __init__(self):
-        self.mean = 0.0
-        self.std = 1.0
-        self.mean_diff = 0.0
-        self.var = 1.0
-        self.count = 0
-        self.epsilon = 1e-6
-
-    def update(self, x):
-        self.count += 1
-        delta = x - self.mean
-        self.mean += delta / self.count
-        delta2 = x - self.mean
-        self.mean_diff += delta * delta2
-        self.var = self.mean_diff / max(1, self.count - 1)
-        self.std = np.sqrt(self.var + self.epsilon)
-
-    def normalize(self, x):
-        normalized = (x - self.mean) / (self.std + self.epsilon)
-        return np.clip(normalized, -5.0, 5.0)
-
 class SAC(nn.Module):
     def __init__(self, state_dim, action_dim, gamma=0.99, alpha=0.1, tau=1e-2, hidden_layer=256,
                  batch_size=256, pi_lr=1e-4, q_lr=1e-4):
@@ -36,10 +14,6 @@ class SAC(nn.Module):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
-
-        # Normalizers for states and rewards
-        self.state_normalizer = Normalizer()
-        self.reward_normalizer = Normalizer()
 
         # Policy Network
         self.pi_model = nn.Sequential(
@@ -67,12 +41,12 @@ class SAC(nn.Module):
 
         # Other parameters
         self.gamma = gamma
-        self.target_entropy = -float(action_dim)  # Target entropy for alpha tuning
+        self.target_entropy = -float(action_dim)
         self.log_alpha = torch.tensor(np.log(alpha), requires_grad=True, device=self.device)
         self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=pi_lr)
         self.tau = tau
         self.batch_size = batch_size
-        self.memory = deque(maxlen=300000)  # Increased replay buffer size
+        self.memory = deque(maxlen=300000)
 
         # Optimizers
         self.pi_optimizer = torch.optim.Adam(self.pi_model.parameters(), lr=pi_lr)
@@ -84,30 +58,19 @@ class SAC(nn.Module):
         return self.log_alpha.exp()
 
     def get_action(self, state):
-        self.state_normalizer.update(state)
-        normalized_state = self.state_normalizer.normalize(state)
-        state_tensor = torch.FloatTensor(normalized_state).unsqueeze(0).to(self.device)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
             action, _ = self.predict_actions(state_tensor)
         return action.detach().cpu().numpy().flatten()
 
     def fit(self, state, action, reward, done, next_state, use_wandb=False):
-        # Normalize state, reward, and next_state
-        self.state_normalizer.update(state)
-        normalized_state = self.state_normalizer.normalize(state)
-        self.reward_normalizer.update(reward)
-        normalized_reward = self.reward_normalizer.normalize(reward)
-        self.state_normalizer.update(next_state)
-        normalized_next_state = self.state_normalizer.normalize(next_state)
-
-        self.memory.append([normalized_state, action, normalized_reward, done, normalized_next_state])
+        self.memory.append([state, action, reward, done, next_state])
 
         if len(self.memory) < self.batch_size:
             return
 
         batch = random.sample(self.memory, self.batch_size)
         
-        # Transform data
         states, actions, rewards, dones, next_states = zip(*batch)
         states = torch.FloatTensor(np.array(states)).to(self.device)
         actions = torch.FloatTensor(np.array(actions)).to(self.device)
@@ -115,7 +78,6 @@ class SAC(nn.Module):
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
         next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
 
-        # Train Q-networks
         with torch.no_grad():
             next_actions, next_log_probs = self.predict_actions(next_states)
             next_states_actions = torch.cat((next_states, next_actions), dim=1)
@@ -134,7 +96,6 @@ class SAC(nn.Module):
         self.update_model(q1_loss, self.q1_optimizer, self.q1_model, self.q1_target_model)
         self.update_model(q2_loss, self.q2_optimizer, self.q2_model, self.q2_target_model)
 
-        # Train policy
         pred_actions, log_probs = self.predict_actions(states)
         states_pred_actions = torch.cat((states, pred_actions), dim=1)
         q1_pred = self.q1_model(states_pred_actions)
@@ -144,11 +105,9 @@ class SAC(nn.Module):
 
         self.update_model(pi_loss, self.pi_optimizer)
 
-        # Train alpha (entropy regularization)
         alpha_loss = -torch.mean(self.alpha * (log_probs.detach() + self.target_entropy))
         self.update_model(alpha_loss, self.alpha_optimizer)
 
-        # Log losses to WandB if enabled
         if use_wandb:
             wandb.log({
                 "q1_loss": q1_loss.item(),
@@ -160,12 +119,10 @@ class SAC(nn.Module):
     def update_model(self, loss, optimizer, model=None, target_model=None):
         optimizer.zero_grad()
         loss.backward()
-        # Gradient clipping to prevent exploding gradients
         if model is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
         optimizer.step()
 
-        # Soft update for target networks
         if model is not None and target_model is not None:
             for param, target_param in zip(model.parameters(), target_model.parameters()):
                 target_param.data.copy_(

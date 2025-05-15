@@ -5,15 +5,13 @@ import os
 import argparse
 import wandb
 from sac import SAC
-# from ppo import PPO
-from datetime import datetime
 
 def train(agent, env, episodes_n=20000, max_steps=1000, load_model_path=None, use_wandb=False):
     """
-    Обучает агента в заданной среде.
+    Обучает агента SAC в заданной среде.
 
     Args:
-        agent: SAC or PPO instance.
+        agent: SAC instance.
         env: Gym environment.
         episodes_n (int): Number of episodes.
         max_steps (int): Maximum steps per episode.
@@ -32,12 +30,8 @@ def train(agent, env, episodes_n=20000, max_steps=1000, load_model_path=None, us
 
     # Load pre-trained model if provided
     if load_model_path and os.path.exists(load_model_path):
-        try:
-            print(f"Loading pre-trained model from {load_model_path}")
-            agent.load_model(load_model_path)
-        except RuntimeError as e:
-            print(f"Failed to load model due to size mismatch: {e}")
-            print("Training from scratch instead.")
+        print(f"Loading pre-trained model from {load_model_path}")
+        agent.load_model(load_model_path)
     else:
         print("No pre-trained model found, training from scratch.")
 
@@ -47,18 +41,15 @@ def train(agent, env, episodes_n=20000, max_steps=1000, load_model_path=None, us
         
         for t in range(max_steps):
             action = agent.get_action(state)
-            scaled_action = np.clip(
-                action * np.array([35.278, 35.278, 44.4, 35.278, 35.278, 44.4, 35.278, 35.278, 44.4, 35.278, 35.278, 44.4]),
-                env.action_space.low,
-                env.action_space.high
-            )
-            next_state, reward, terminated, truncated, _ = env.step(scaled_action)
+            next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
             agent.fit(state, action, reward, done, next_state, use_wandb=use_wandb)
         
             total_reward += reward
             state = next_state
+
+            # Rendering is enabled via render_mode="human"
 
             if done:
                 break
@@ -77,13 +68,13 @@ def train(agent, env, episodes_n=20000, max_steps=1000, load_model_path=None, us
                 "episode": episode,
                 "total_reward": total_reward,
                 "avg_reward": avg_reward,
-                "steps_per_episode": t + 1
+                "steps_per_episode": t + 1  # Log steps per episode
             })
         
         # Save model if average reward improves
         if avg_reward > best_avg_reward:
             best_avg_reward = avg_reward
-            agent.save_model(f"aliengo_models/aliengo_policy.pth")
+            agent.save_model("aliengo_models/sac_policy.pth")
             print(f"Episode {episode}: Saved model with avg_reward = {avg_reward:.2f}")
         
         print(f'Episode {episode}: Total Reward = {total_reward}')
@@ -92,18 +83,20 @@ def train(agent, env, episodes_n=20000, max_steps=1000, load_model_path=None, us
 
 def main():
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="Train SAC or PPO on Aliengo environment")
+    parser = argparse.ArgumentParser(description="Train SAC on Aliengo (Ant-v5) environment")
     parser.add_argument('--use_wandb', action='store_true', help='Enable WandB logging')
-    parser.add_argument('--agent', choices=['sac', 'ppo'], default='sac', help='Choose agent: sac or ppo')
     args = parser.parse_args()
 
     # Initialize WandB if enabled
     if args.use_wandb:
-        run_name = f"{args.agent}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        wandb.init(project="Aliengo-training", name=run_name, config={
-            "agent": args.agent,
+        wandb.init(project="Aliengo-training", config={
             "episodes_n": 20000,
             "max_steps": 1000,
+            "forward_reward_weight": 1,
+            "ctrl_cost_weight": 0.05,
+            "contact_cost_weight": 5e-4,
+            "healthy_reward": 1,
+            "healthy_z_range": (0.195, 0.75),
             "reset_noise_scale": 0.1,
             "frame_skip": 25,
         })
@@ -112,74 +105,43 @@ def main():
 
     # Initialize environment
     env = gym.make(
-        'Ant-v5',
-        xml_file='/home/eidel/projects/prog_rob/unitree_mujoco/unitree_robots/aliengo/scene.xml',
-        forward_reward_weight=1,
-        ctrl_cost_weight=0.05,
-        contact_cost_weight=5e-4,
-        healthy_reward=1,
-        main_body=1,
-        healthy_z_range=(0.195, 0.75),
-        include_cfrc_ext_in_observation=True,
-        exclude_current_positions_from_observation=False,
-        reset_noise_scale=0.1,
-        frame_skip=25,
+        'Humanoid-v5',
+        xml_file='/home/eidel/projects/prog_rob/unitree_mujoco/unitree_robots/h1/scene.xml',
         max_episode_steps=1000,
-        render_mode = 'human',
+        render_mode="human",
     )
 
-    print(f'Environment name: Aliengo({env.spec.id})')
+    print(f'Environment name: {env.spec.id}')
     state_dim = env.observation_space.shape[0]
     print(f'Observation space: {state_dim}')
     action_dim = env.action_space.shape[0]
     print(f'Action space: {action_dim}')
 
-    # Initialize agent
-    if args.agent == 'sac':
-        agent = SAC(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            gamma=0.99,
-            alpha=0.1,
-            tau=0.005,
-            batch_size=256,
-            pi_lr=1e-4,
-            q_lr=1e-4
-        )
-    else:  # ppo
-        agent = PPO(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            gamma=0.99,
-            batch_size=128,
-            epsilon=0.2,
-            epoch_n=30,
-            pi_lr=1e-4,
-            v_lr=5e-4
-        )
-
-    env = gym.wrappers.NormalizeObservation(env)
-    env = gym.wrappers.NormalizeReward(env)
+    # Initialize SAC agent
+    agent = SAC(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        gamma=0.99,
+        alpha=0.1,
+        tau=0.005,
+        batch_size=256,
+        pi_lr=1e-4,
+        q_lr=1e-4
+    )
 
     # Train the agent
-    total_rewards = train(agent, env, 
-                         load_model_path=f"aliengo_models/aliengo_policy.pth", 
-                         use_wandb=args.use_wandb)
+    total_rewards = train(agent, env, use_wandb=args.use_wandb)
 
     # Close environment
     env.close()
 
     # Plot rewards
-    plt.figure(figsize=(10, 6))
     plt.plot(total_rewards)
-    plt.title(f'Total Rewards ({args.agent.upper()})')
-    plt.xlabel('Episode')
-    plt.ylabel('Reward')
+    plt.title('Total Rewards')
     plt.grid()
-    plt.savefig(f'aliengo_models/{args.agent}_rewards.png')
-    plt.close()
+    plt.show()
 
-    # Finish WandB run if enabled
+    # Finish WandB run if enabled   
     if args.use_wandb:
         wandb.finish()
 
