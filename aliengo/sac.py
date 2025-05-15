@@ -12,7 +12,7 @@ class SAC(nn.Module):
                  batch_size=256, pi_lr=1e-4, q_lr=1e-4):
         super().__init__()
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
 
         # Policy Network

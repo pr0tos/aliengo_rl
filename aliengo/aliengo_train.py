@@ -123,7 +123,7 @@ def main():
         include_cfrc_ext_in_observation=True,
         exclude_current_positions_from_observation=False,
         reset_noise_scale=0.1,
-        frame_skip=25,
+        frame_skip=5,
         max_episode_steps=1000,
         render_mode = 'human',
     )
