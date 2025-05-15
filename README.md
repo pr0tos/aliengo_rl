@@ -1,6 +1,6 @@
-###Aliengo RL
+###Aliengo RL###
 Training and visualization of the Aliengo quadruped walking using Soft Actor-Critic (SAC) in the Ant-v5 environment (Gymnasium/MuJoCo).
-#Installation
+#Installation#
 
 Clone the repository:
 bash
@@ -12,18 +12,13 @@ cd aliengo_rl
 Create a Conda environment:
 bash
 ```
-conda create -n prog_rob python=3.8
-conda activate prog_rob
+conda env create -f environment.yml
+conda activate aliengo_rl
+pip install --upgrade anyio
 ```
 
-Install dependencies:
-bash
-```
-pip install -r requirements.txt
-```
+#Usage#
 
-#Usage
-Training
 Train a new SAC model:
 bash
 ```
@@ -33,12 +28,33 @@ python aliengo_train.py --use_wandb
 Saves model to aliengo_models/aliengo_policy.pth.
 Logs metrics to WandB (if enabled).
 
-Note: The current model (aliengo_policy.pth) may be incompatible (state_dim=115 vs 113). Training will create a new compatible model.
-
-#Visualization
+#Visualization#
 Visualize the trained policy:
 bash
 ```
 python viz_aliengo_walk.py
 ```
+#Known Issues and Fixes#
+1. CUDA Initialization Error
+Error:
+```
+   UserWarning: CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment, e.g. changing env variable CUDA_VISIBLE_DEVICES after program start. Setting the available devices to be zero. (Triggered internally at /opt/conda/conda-bld/pytorch_1724789115765/work/c10/cuda/CUDAFunctions.cpp:108.)
+   return torch._C._cuda_getDeviceCount() > 0
+```
+Solution:
+```
+sudo rmmod nvidia_uvm
+sudo modprobe nvidia_uvm
+```
 
+2. GLFW/OpenGL Configuration Issues
+Error:
+```
+GLFWError: (65542) b'GLX: No GLXFBConfigs returned'  
+GLFWError: (65545) b'GLX: Failed to find a suitable GLXFBConfig'  
+Assertion `window != NULL' failed.
+```
+Solution:
+```
+export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
+```
