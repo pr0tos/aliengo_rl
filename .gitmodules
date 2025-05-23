@@ -1,3 +1,9 @@
 [submodule "unitree_mujoco"]
 	path = unitree_mujoco
 	url = https://github.com/kamvlad/unitree_mujoco.git
+[submodule "antro/loco-mujoco"]
+	path = antro/loco-mujoco
+	url = https://github.com/robfiras/loco-mujoco.git
+[submodule "loco-mujoco"]
+	path = loco-mujoco
+	url = https://github.com/robfiras/loco-mujoco.git
